@@ -80,6 +80,9 @@
       .v-bottom-navigation button {
         box-sizing: border-box;
       }
+      .v-bottom-navigation button.v-btn:before {
+        background-color: transparent;
+      }
       .v-speed-dial {
         margin-bottom: calc(48px + constant(safe-area-inset-bottom));
         margin-bottom: calc(48px + env(safe-area-inset-bottom));
@@ -995,6 +998,9 @@
                         </v-card-actions>
                       </v-card>
                     </v-dialog>
+                    <v-list-item @click="copyData(curapp)">
+                      <v-list-item-title>复制数据</v-list-item-title>
+                    </v-list-item>
                     <v-divider></v-divider>
                     <v-list-item @click="clearAppDatas()">
                       <v-list-item-title>清空数据</v-list-item-title>
@@ -1601,7 +1607,7 @@
             const apps = []
             this.appSubs.forEach((appsub) => {
               const sub = this.appSubCaches[appsub.url]
-              if (sub && sub.apps && Array.isArray(sub.apps)) {
+              if (sub && sub.apps && Array.isArray(sub.apps) && !appsub.isErr) {
                 sub.apps.forEach((app) => {
                   this.loadAppBaseInfo(app)
                   apps.push(app)
@@ -1616,7 +1622,9 @@
             const subs = JSON.parse(JSON.stringify(this.box.usercfgs.appsubs))
             subs.forEach((sub) => {
               const cacheSub = this.appSubCaches[sub.url]
-              if (cacheSub) {
+              const isValidSub = cacheSub && Array.isArray(cacheSub.apps) && cacheSub.apps.length > 0
+              const isValidSubApps = isValidSub && !cacheSub.apps.find((app) => !app.id)
+              if (cacheSub && isValidSub && isValidSubApps) {
                 Object.assign(sub, cacheSub)
               } else {
                 sub.isErr = true
@@ -1992,8 +2000,14 @@
           // 加载应用信息
           loadAppBaseInfo(app) {
             // 应用图标
-            app.icons = app.icons ? app.icons : this.ui.defaultIcons
+            app.icons = Array.isArray(app.icons) ? app.icons : this.ui.defaultIcons
+            const isBrokenIcons = app.icons.find((i) => i.includes('/Orz-3/task/master/'))
+            if (isBrokenIcons) {
+              app.icons[0] = app.icons[0].replace('/Orz-3/mini/master/', '/Orz-3/mini/master/Alpha/')
+              app.icons[1] = app.icons[1].replace('/Orz-3/task/master/', '/Orz-3/mini/master/Color/')
+            }
             app.icon = app.icons[this.iconThemeIdx]
+
             // 是否收藏
             const isFav = this.box.usercfgs.favapps.includes(app.id)
             app.favIcon = isFav ? 'mdi-star' : 'mdi-star-outline'
@@ -2142,10 +2156,21 @@
             const val = JSON.stringify(this.box.curSessions)
             const curSessions = [{ key, val }]
             const datas = [...session.datas, ...curSessions]
+
+            this.clearAppDatas()
             axios.post('/api/save', datas).then((resp) => {
               delete resp.data.usercfgs
               Object.assign(this.box, resp.data)
             })
+          },
+          // 复制应用数据为对象数据
+          copyData(curdata) {
+            const datas = curdata.datas
+            let result = {}
+            datas.forEach(({ key, val }) => {
+              result[key] = val
+            })
+            this.copy(JSON.stringify(result))
           },
           // 保存应用数据
           clearAppDatas(key) {
